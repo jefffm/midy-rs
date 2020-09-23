@@ -55,7 +55,7 @@ const APP: () = {
 
         // User LED
         let mut gpioc = cx.device.GPIOC.split(&mut rcc.apb2);
-        let mut led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
+        let led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
 
         // Freeze the configuration of all the clocks in the system and store the frozen frequencies
         // in `clocks`
@@ -105,22 +105,19 @@ const APP: () = {
 
     #[idle(resources = [MIDI, LED])]
     fn idle(mut cx: idle::Context) -> ! {
-        cx.resources.LED.set_low().unwrap();
+        cx.resources.LED.set_high().unwrap();
         loop {
             hprintln!("idle").unwrap();
-            cx.resources.LED.set_low().unwrap();
 
             // Handle MIDI messages
             let message = cx.resources.MIDI.lock(|m| m.dequeue());
 
             if let Some(b) = message {
                 if let Some(note_on) = NoteOn::from_bytes(b) {
-                    cx.resources.LED.set_high().unwrap();
                     hprintln!("note on").unwrap();
                 };
 
                 if let Some(note_off) = NoteOff::from_bytes(b) {
-                    cx.resources.LED.set_low().unwrap();
                     hprintln!("note off").unwrap();
                 };
             }
