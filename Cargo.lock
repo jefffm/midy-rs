@@ -21,6 +21,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "autocfg"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
+
+[[package]]
 name = "bare-metal"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -34,6 +40,12 @@ name = "bitfield"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46afbd2983a5d5a7bd740ccb198caf5b82f45c40c09c0eed36052d91cb92e719"
+
+[[package]]
+name = "byteorder"
+version = "1.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
 
 [[package]]
 name = "cast"
@@ -78,6 +90,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "cortex-m-rtic"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b30efcb6b7920d9016182c485687f0012487032a14c415d2fce6e9862ef8260e"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "cortex-m-rtic-macros",
+ "heapless",
+ "rtic-core",
+ "version_check",
+]
+
+[[package]]
+name = "cortex-m-rtic-macros"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a1a6a4c9550373038c0e21a78d44d529bd697c25bbf6b8004bddc6e63b119c7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rtic-syntax",
+ "syn",
+]
+
+[[package]]
+name = "cortex-m-semihosting"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "113ef0ecffee2b62b58f9380f4469099b30e9f9cbee2804771b4203ba1762cfa"
+dependencies = [
+ "cortex-m",
+]
+
+[[package]]
 name = "embedded-hal"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -106,14 +153,59 @@ dependencies = [
 ]
 
 [[package]]
+name = "hash32"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4041af86e63ac4298ce40e5cca669066e75b6f1aa3390fe2561ffa5e1d9f4cc"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00d63df3d41950fb462ed38308eea019113ad1508da725bbedcd0fa5a85ef5f7"
+
+[[package]]
+name = "heapless"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73a8a2391a3bc70b31f60e7a90daa5755a360559c0b6b9c5cfc0fee482362dc0"
+dependencies = [
+ "as-slice",
+ "generic-array 0.13.2",
+ "hash32",
+ "stable_deref_trait",
+]
+
+[[package]]
+name = "indexmap"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55e2e4c765aa53a0424761bf9f41aa7a6ac1efa87238f59560640e27fca028f2"
+dependencies = [
+ "autocfg",
+ "hashbrown",
+]
+
+[[package]]
 name = "midy-rs"
 version = "0.1.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
+ "cortex-m-rtic",
+ "cortex-m-rtic-macros",
+ "cortex-m-semihosting",
  "embedded-hal",
+ "heapless",
  "panic-halt",
+ "panic-semihosting",
+ "stm32-usbd",
  "stm32f1xx-hal",
+ "usb-device",
+ "usbd-midi",
 ]
 
 [[package]]
@@ -138,6 +230,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de96540e0ebde571dc55c73d60ef407c653844e6f9a1e2fdbd40c07b9252d812"
 
 [[package]]
+name = "panic-semihosting"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c03864ac862876c16a308f5286f4aa217f1a69ac45df87ad3cd2847f818a642c"
+dependencies = [
+ "cortex-m",
+ "cortex-m-semihosting",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -160,6 +262,23 @@ name = "r0"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2a38df5b15c8d5c7e8654189744d8e396bddc18ad48041a500ce52d6948941f"
+
+[[package]]
+name = "rtic-core"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab51fe832317e805f869b3d859f91aadf855c2c3da51f9b84bc645c201597158"
+
+[[package]]
+name = "rtic-syntax"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8152fcaa845720d61e6cc570548b89144c2c307f18a480bbd97e55e9f6eeff04"
+dependencies = [
+ "indexmap",
+ "proc-macro2",
+ "syn",
+]
 
 [[package]]
 name = "rustc_version"
@@ -192,6 +311,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
+name = "stm32-usbd"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70d13eca735cae37df697f599777b000cc0ee924df8452f2b4bfaa6798ab0338"
+dependencies = [
+ "cortex-m",
+ "usb-device",
+ "vcell",
+]
+
+[[package]]
 name = "stm32f1"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -215,6 +345,7 @@ dependencies = [
  "cortex-m-rt",
  "embedded-hal",
  "nb 0.1.3",
+ "stm32-usbd",
  "stm32f1",
  "void",
 ]
@@ -243,10 +374,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7fe0bb3479651439c9112f72b6c505038574c9fbb575ed1bf3b797fa39dd564"
 
 [[package]]
+name = "usb-device"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e5e2b9ba23f0d9ef7a34e498b6581c9d67944a1916542bfc7238bf1dc0d6acd"
+
+[[package]]
+name = "usbd-midi"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f3140ea7a0704683358e1665800667a264e06a5fcec506bf803d5d7d7e09f4c"
+dependencies = [
+ "embedded-hal",
+ "nb 0.1.3",
+ "usb-device",
+]
+
+[[package]]
 name = "vcell"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "876e32dcadfe563a4289e994f7cb391197f362b6315dc45e8ba4aa6f564a4b3c"
+
+[[package]]
+name = "version_check"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5a972e5669d67ba988ce3dc826706fb0a8b01471c088cb0b6110b805cc36aed"
 
 [[package]]
 name = "void"
