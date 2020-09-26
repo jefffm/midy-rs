@@ -32,7 +32,6 @@ panic-halt = "0.2.0"
 usb-device = "0.2.5"
 stm32f1xx-hal = { version = "0.6.1", features = ["rt", "stm32f103", "stm32-usbd"] }
 stm32-usbd = { version = "0.5.1", features = ["ram_access_1x16"] }
-usbd-midi = "0.2.0"
 heapless = "0.5.6"
 
 [dependencies.cortex-m-semihosting]

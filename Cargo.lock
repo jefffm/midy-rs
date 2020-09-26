@@ -205,7 +205,6 @@ dependencies = [
  "stm32-usbd",
  "stm32f1xx-hal",
  "usb-device",
- "usbd-midi",
 ]
 
 [[package]]
@@ -378,17 +377,6 @@ name = "usb-device"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e5e2b9ba23f0d9ef7a34e498b6581c9d67944a1916542bfc7238bf1dc0d6acd"
-
-[[package]]
-name = "usbd-midi"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f3140ea7a0704683358e1665800667a264e06a5fcec506bf803d5d7d7e09f4c"
-dependencies = [
- "embedded-hal",
- "nb 0.1.3",
- "usb-device",
-]
 
 [[package]]
 name = "vcell"
