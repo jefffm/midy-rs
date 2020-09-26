@@ -4,58 +4,58 @@
 #![no_std]
 #![allow(non_snake_case)]
 
-use panic_semihosting as _;
+mod state;
+mod stm32f1xx;
+mod usb;
 
+extern crate panic_semihosting;
+
+use crate::state::midi_events;
+use crate::state::{ApplicationState, Button, Message};
+use crate::stm32f1xx::initialize_usb;
+use crate::usb::{configure_usb, usb_poll};
 use cortex_m::{asm::delay, peripheral::DWT};
 use cortex_m_semihosting::hprintln;
-
 use embedded_hal::digital::v2::OutputPin;
 use stm32f1xx_hal::{
     delay::Delay,
-    gpio::*,
+    gpio::gpioc::PC13,
+    gpio::{Output, PushPull},
     prelude::*,
     usb::{Peripheral, UsbBus, UsbBusType},
 };
-
-use crate::midi::{ControlChange, MidiMessage, NoteOff, NoteOn};
-
-use usb_device::bus;
-use usb_device::prelude::*;
-
-mod midi;
-mod usb_midi;
-
-// SYSCLK = 72MHz --> clock_period = 13.9ns
-
-const VID: u16 = 0x1ACC;
-const PID: u16 = 0x3801;
-
-type LED = gpioc::PC13<Output<PushPull>>;
+use usb_device::{
+    bus,
+    prelude::{UsbDevice, UsbDeviceState},
+};
+use usbd_midi::{
+    data::usb_midi::usb_midi_event_packet::UsbMidiEventPacket, midi_device::MidiClass,
+};
 
 #[rtic::app(device = stm32f1xx_hal::pac, monotonic = rtic::cyccnt::CYCCNT, peripherals = true)]
 const APP: () = {
     struct Resources {
-        USB_DEV: UsbDevice<'static, UsbBusType>,
-        MIDI: usb_midi::MidiClass<'static, UsbBusType>,
-        LED: LED,
+        usb_dev: UsbDevice<'static, UsbBusType>,
+        midi: MidiClass<'static, UsbBusType>,
+        led: PC13<Output<PushPull>>,
+        state: ApplicationState,
     }
 
     #[init()]
     fn init(mut cx: init::Context) -> init::LateResources {
         static mut USB_BUS: Option<bus::UsbBusAllocator<UsbBusType>> = None;
 
-        cx.core.DCB.enable_trace();
-        DWT::unlock();
-        cx.core.DWT.enable_cycle_counter();
-
         // Take ownership over the raw flash and rcc devices and convert them into the corresponding
         // HAL structs
-        let mut flash = cx.device.FLASH.constrain();
         let mut rcc = cx.device.RCC.constrain();
-
-        // User LED
+        let mut flash = cx.device.FLASH.constrain();
+        let mut gpioa = cx.device.GPIOA.split(&mut rcc.apb2);
+        let mut gpiob = cx.device.GPIOB.split(&mut rcc.apb2);
         let mut gpioc = cx.device.GPIOC.split(&mut rcc.apb2);
+        let pa12 = gpioa.pa12;
+        let pa11 = gpioa.pa11;
         let led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
+        let usb = cx.device.USB;
 
         // Freeze the configuration of all the clocks in the system and store the frozen frequencies
         // in `clocks`
@@ -68,93 +68,74 @@ const APP: () = {
 
         assert!(clocks.usbclk_valid());
 
-        let mut gpioa = cx.device.GPIOA.split(&mut rcc.apb2);
-
-        // BluePill board has a pull-up resistor on the D+ line.
-        // Pull the D+ pin down to send a RESET condition to the USB bus.
-        let mut usb_dp = gpioa.pa12.into_push_pull_output(&mut gpioa.crh);
-        usb_dp.set_low().ok();
-        delay(clocks.sysclk().0 / 100);
-
-        // USB
-        let usb_dm = gpioa.pa11;
-        let usb_dp = usb_dp.into_floating_input(&mut gpioa.crh);
-
-        let usb = Peripheral {
-            usb: cx.device.USB,
-            pin_dm: usb_dm,
-            pin_dp: usb_dp,
-        };
-
+        let usb = initialize_usb(&clocks, pa12, pa11, &mut gpioa.crh, usb);
         *USB_BUS = Some(UsbBus::new(usb));
-
-        let midi = usb_midi::MidiClass::new(USB_BUS.as_ref().unwrap());
-
-        let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(VID, PID))
-            .manufacturer("jefffm")
-            .product("midy-rs")
-            .max_power(500)
-            .build();
+        let midi = MidiClass::new(USB_BUS.as_ref().unwrap());
+        let usb_dev = configure_usb(USB_BUS.as_ref().unwrap());
 
         init::LateResources {
-            USB_DEV: usb_dev,
-            MIDI: midi,
-            LED: led,
+            usb_dev: usb_dev,
+            midi: midi,
+            led: led,
+            state: ApplicationState::init(),
         }
     }
 
-    #[idle(resources = [MIDI, LED])]
-    fn idle(mut cx: idle::Context) -> ! {
-        cx.resources.LED.set_high().unwrap();
-        loop {
-            hprintln!("idle").unwrap();
+    #[task( spawn = [send_midi],
+            resources = [state],
+            priority = 1,
+            capacity = 5)]
+    fn update(cx: update::Context, message: Message) {
+        let old = cx.resources.state.clone();
+        ApplicationState::update(&mut *cx.resources.state, message);
+        let mut effects = midi_events(&old, cx.resources.state);
+        let effect = effects.next();
 
-            // Handle MIDI messages
-            let message = cx.resources.MIDI.lock(|m| m.dequeue());
-
-            if let Some(b) = message {
-                if let Some(note_on) = NoteOn::from_bytes(b) {
-                    hprintln!("note on").unwrap();
-                };
-
-                if let Some(note_off) = NoteOff::from_bytes(b) {
-                    hprintln!("note off").unwrap();
-                };
+        match effect {
+            Some(midi) => {
+                let _ = cx.spawn.send_midi(midi);
             }
+            _ => (),
         }
     }
 
-    #[task(binds = USB_HP_CAN_TX, resources = [USB_DEV, MIDI])]
+    /// Sends a midi message over the usb bus
+    /// Note: this runs at a lower priority than the usb bus
+    /// and will eat messages if the bus is not configured yet
+    #[task(priority=2, resources = [usb_dev,midi])]
+    fn send_midi(cx: send_midi::Context, message: UsbMidiEventPacket) {
+        let mut midi = cx.resources.midi;
+        let mut usb_dev = cx.resources.usb_dev;
+
+        // Lock this so USB interrupts don't take over
+        // Ideally we may be able to better determine this, so that
+        // it doesn't need to be locked
+        usb_dev.lock(|usb_dev| {
+            if usb_dev.state() == UsbDeviceState::Configured {
+                midi.lock(|midi| {
+                    let _ = midi.send_message(message);
+                })
+            }
+        });
+    }
+
+    // Process usb events straight away from High priority interrupts
+    #[task(binds = USB_HP_CAN_TX,resources = [usb_dev, midi], priority=3)]
     fn usb_hp_can_tx(mut cx: usb_hp_can_tx::Context) {
-        hprintln!("sending usb").unwrap();
-        usb_poll(&mut cx.resources.USB_DEV, &mut cx.resources.MIDI);
+        usb_poll(&mut cx.resources.usb_dev, &mut cx.resources.midi);
     }
 
-    #[task(binds = USB_LP_CAN_RX0, resources = [USB_DEV, MIDI])]
+    // Process usb events straight away from Low priority interrupts
+    #[task(binds= USB_LP_CAN_RX0, resources = [usb_dev, midi], priority=3)]
     fn usb_lp_can_rx0(mut cx: usb_lp_can_rx0::Context) {
-        hprintln!("receiving usb").unwrap();
-        usb_poll(&mut cx.resources.USB_DEV, &mut cx.resources.MIDI);
+        usb_poll(&mut cx.resources.usb_dev, &mut cx.resources.midi);
     }
 
+    // Required for software tasks
     extern "C" {
-        fn EXTI0();
+        // Uses the DMA1_CHANNELX interrupts for software
+        // task scheduling.
+        fn DMA1_CHANNEL1();
+        fn DMA1_CHANNEL2();
     }
 };
-
-fn usb_poll<B: bus::UsbBus>(
-    usb_dev: &mut UsbDevice<'static, B>,
-    midi: &mut usb_midi::MidiClass<'static, B>,
-) -> bool {
-    if !midi.write_queue_is_empty() {
-        midi.write_queue_to_host();
-    }
-
-    if !usb_dev.poll(&mut [midi]) {
-        return false;
-    }
-
-    match midi.read_to_queue() {
-        Ok(len) if len > 0 => true,
-        _ => false,
-    }
-}
