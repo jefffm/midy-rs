@@ -4,9 +4,11 @@
 #![no_std]
 #![allow(non_snake_case)]
 
+mod midi;
 mod state;
 mod stm32f1xx;
 mod usb;
+mod usb_midi;
 
 extern crate panic_semihosting;
 
@@ -14,6 +16,7 @@ use crate::state::midi_events;
 use crate::state::{ApplicationState, Button, Message};
 use crate::stm32f1xx::initialize_usb;
 use crate::usb::{configure_usb, usb_poll};
+use crate::usb_midi::MidiClass;
 use cortex_m::{asm::delay, peripheral::DWT};
 use cortex_m_semihosting::hprintln;
 use embedded_hal::digital::v2::OutputPin;
@@ -22,15 +25,14 @@ use stm32f1xx_hal::{
     gpio::gpioc::PC13,
     gpio::{Output, PushPull},
     prelude::*,
+    timer::{CountDownTimer, Event, Timer},
     usb::{Peripheral, UsbBus, UsbBusType},
 };
 use usb_device::{
     bus,
     prelude::{UsbDevice, UsbDeviceState},
 };
-use usbd_midi::{
-    data::usb_midi::usb_midi_event_packet::UsbMidiEventPacket, midi_device::MidiClass,
-};
+use usbd_midi::data::usb_midi::usb_midi_event_packet::UsbMidiEventPacket;
 
 #[rtic::app(device = stm32f1xx_hal::pac, monotonic = rtic::cyccnt::CYCCNT, peripherals = true)]
 const APP: () = {
@@ -42,7 +44,7 @@ const APP: () = {
     }
 
     #[init()]
-    fn init(mut cx: init::Context) -> init::LateResources {
+    fn init(cx: init::Context) -> init::LateResources {
         static mut USB_BUS: Option<bus::UsbBusAllocator<UsbBusType>> = None;
 
         // Take ownership over the raw flash and rcc devices and convert them into the corresponding
@@ -50,12 +52,13 @@ const APP: () = {
         let mut rcc = cx.device.RCC.constrain();
         let mut flash = cx.device.FLASH.constrain();
         let mut gpioa = cx.device.GPIOA.split(&mut rcc.apb2);
-        let mut gpiob = cx.device.GPIOB.split(&mut rcc.apb2);
         let mut gpioc = cx.device.GPIOC.split(&mut rcc.apb2);
         let pa12 = gpioa.pa12;
         let pa11 = gpioa.pa11;
-        let led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
+        let mut led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
         let usb = cx.device.USB;
+
+        led.set_high().unwrap();
 
         // Freeze the configuration of all the clocks in the system and store the frozen frequencies
         // in `clocks`
@@ -67,6 +70,11 @@ const APP: () = {
             .freeze(&mut flash.acr);
 
         assert!(clocks.usbclk_valid());
+
+        //Timer that will be used to read IO
+        let mut timer =
+            Timer::tim1(cx.device.TIM1, &clocks, &mut rcc.apb2).start_count_down(100.hz());
+        timer.listen(Event::Update);
 
         let usb = initialize_usb(&clocks, pa12, pa11, &mut gpioa.crh, usb);
         *USB_BUS = Some(UsbBus::new(usb));
@@ -86,12 +94,13 @@ const APP: () = {
             priority = 1,
             capacity = 5)]
     fn update(cx: update::Context, message: Message) {
+        hprintln!("Running update: {:?}", message).unwrap();
         let old = cx.resources.state.clone();
         ApplicationState::update(&mut *cx.resources.state, message);
-        let mut effects = midi_events(&old, cx.resources.state);
-        let effect = effects.next();
+        let mut midiSettings = midi_events(&old, cx.resources.state);
+        let midiSettings = midiSettings.next();
 
-        match effect {
+        match midiSettings {
             Some(midi) => {
                 let _ = cx.spawn.send_midi(midi);
             }
@@ -113,7 +122,7 @@ const APP: () = {
         usb_dev.lock(|usb_dev| {
             if usb_dev.state() == UsbDeviceState::Configured {
                 midi.lock(|midi| {
-                    let _ = midi.send_message(message);
+                    //let _ = midi.send_message(message);
                 })
             }
         });

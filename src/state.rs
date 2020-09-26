@@ -8,7 +8,7 @@ use usbd_midi::data::usb_midi::cable_number::CableNumber;
 use usbd_midi::data::usb_midi::usb_midi_event_packet::UsbMidiEventPacket;
 
 /// The buttons the user can press
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Button {
     One,
     Two,
@@ -20,7 +20,7 @@ pub enum Button {
 type ButtonMap = LinearMap<Button, State, U5>;
 
 /// States the buttons emit
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum State {
     On,
     Off,

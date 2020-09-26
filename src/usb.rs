@@ -1,22 +1,24 @@
+use crate::usb_midi::MidiClass;
 use usb_device::bus::UsbBus;
 use usb_device::bus::UsbBusAllocator;
 use usb_device::device::UsbDevice;
 use usb_device::device::UsbVidPid;
 use usb_device::prelude::UsbDeviceBuilder;
 use usbd_midi::data::usb::constants::USB_CLASS_NONE;
-use usbd_midi::midi_device::MidiClass;
 
 const VID: u16 = 0x1ACC;
 const PID: u16 = 0x3801;
 
 /// Configures the usb device as seen by the operating system.
 pub fn configure_usb<'a, B: UsbBus>(usb_bus: &'a UsbBusAllocator<B>) -> UsbDevice<'a, B> {
-    let usb_vid_pid = UsbVidPid(0x16c0, 0x27dd);
+    let usb_vid_pid = UsbVidPid(VID, PID);
 
     UsbDeviceBuilder::new(usb_bus, usb_vid_pid)
         .manufacturer("jefffm")
         .product("midy-rs")
+        .serial_number("1")
         .max_power(500)
+        .device_class(USB_CLASS_NONE)
         .build()
 }
 
